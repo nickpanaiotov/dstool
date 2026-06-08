@@ -1,5 +1,10 @@
 # DSTool
 
+[![CI](https://github.com/nickpanaiotov/dstool/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nickpanaiotov/dstool/actions/workflows/ci.yml) [![Latest release](https://img.shields.io/github/v/release/nickpanaiotov/dstool)](https://github.com/nickpanaiotov/dstool/releases/latest) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+> The **CI** badge above covers the unit tests (`./mvnw test`), the native-image build, and the
+> CLI smoke test, on **macOS arm64** and **Linux x86_64**.
+
 > **English summary.** DSTool is the missing **macOS and Linux** signing tool for **StampIT** and
 > other Bulgarian qualified electronic signatures (QES). StampIT's own desktop signer — also called
 > *DSTool* — and its middleware are **Windows-only**, leaving Mac users unable to sign documents
@@ -55,7 +60,7 @@ StampIT (управляван от **Информационно обслужва
 **само за Windows**. Потребителите на macOS, които притежават КЕП от StampIT, на практика
 нямат официален начин да подпишат документ.
 
-Този проект запълва празнината: открит код, който върши същата работа на macOS — подписване с
+Този проект запълва празнината: отворен код, който върши същата работа на macOS — подписване с
 вашата карта/токен директно през стандартния **PKCS#11** интерфейс на драйвера, без нужда от
 Windows или платени инструменти на трети страни.
 
