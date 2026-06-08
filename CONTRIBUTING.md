@@ -44,7 +44,7 @@ DSTOOL_PIN=1234 ./target/dstool list-keys --pkcs11-lib /opt/homebrew/lib/softhsm
   `src/main/resources/META-INF/native-image/org.dstool/dstool/`):
   ```sh
   java -agentlib:native-image-agent=config-merge-dir=src/main/resources/META-INF/native-image/org.dstool/dstool \
-       --enable-native-access=ALL-UNNAMED -cp <classpath> org.dstool.DsTool sign --pkcs11-lib <lib> <файл>
+       --enable-native-access=ALL-UNNAMED -cp <classpath> org.dstool.DsTool sign --slot 0 --pkcs11-lib <lib> <файл>
   ```
   > **Внимание (FFM downcalls):** всяка нова PKCS#11 функция с **различен брой/тип аргументи**
   > въвежда нова форма на native извикване, за която native image трябва да има предварително
