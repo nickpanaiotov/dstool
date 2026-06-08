@@ -15,11 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up GraalVM CE 25
+      # Oracle GraalVM (download.oracle.com) — its CDN is reliable; the
+      # graalvm-community assets on GitHub's release CDN intermittently 504.
+      # CI produces no distributed artifact, so the toolchain choice here has
+      # no licensing impact on releases.
+      - name: Set up GraalVM 25 (Oracle)
         uses: graalvm/setup-graalvm@v1
         with:
           java-version: '25'
-          distribution: 'graalvm-community'
+          distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
