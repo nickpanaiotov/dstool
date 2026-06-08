@@ -13,7 +13,7 @@ jobs:
     name: build + smoke (arm64)
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up GraalVM CE 25
         uses: graalvm/setup-graalvm@v1
