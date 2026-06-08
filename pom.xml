@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.dstool</groupId>
+  <artifactId>dstool</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>DSTool</name>
+  <description>macOS CAdES signer for StampIT / Bulgarian QES smart cards</description>
+
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <!-- EU DSS (LGPL-2.1). 6.x is JDK-25-tested and published to Maven Central. -->
+    <dss.version>6.4</dss.version>
+    <picocli.version>4.7.7</picocli.version>
+    <slf4j.version>2.0.16</slf4j.version>
+    <junit.version>5.11.3</junit.version>
+
+    <!-- Plugins -->
+    <compiler.plugin.version>3.13.0</compiler.plugin.version>
+    <surefire.plugin.version>3.5.2</surefire.plugin.version>
+    <native.plugin.version>1.1.1</native.plugin.version>
+    <dependency.plugin.version>3.8.1</dependency.plugin.version>
+    <jar.plugin.version>3.4.2</jar.plugin.version>
+    <exec.plugin.version>3.5.0</exec.plugin.version>
+
+    <main.class>org.dstool.DsTool</main.class>
+    <!-- FFM native access for the PKCS#11 connector (no JNI). -->
+    <native.access.arg>--enable-native-access=ALL-UNNAMED</native.access.arg>
+  </properties>
+
+  <!--
+    EU DSS (eu.europa.ec.joinup.sd-dss) is the European Commission's Digital Signature
+    Service. Version 6.x is mirrored to Maven Central, but we also declare the Commission's
+    own repository so DSS is resolved from the authoritative EU source.
+    (The repo's maven-metadata index is stale at 5.11, but fixed versions such as 6.4
+    resolve directly.)
+  -->
+  <repositories>
+    <repository>
+      <id>cefdigital</id>
+      <name>EU Commission DSS repository</name>
+      <url>https://ec.europa.eu/digital-building-blocks/artifact/repository/esignaturedss/</url>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <!-- CAdES creation (pulls dss-document, dss-spi, dss-model, dss-enumerations, BouncyCastle). -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-cades</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+    <!-- DSS 6.x splits the CMS engine into a pluggable layer; pick the in-memory object impl. -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-cms-object</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+    <!-- Token SPI: SignatureTokenConnection / DSSPrivateKeyEntry / Pkcs12SignatureToken.
+         We provide our own FFM PKCS#11 token but reuse these interfaces and the PKCS#12 token (tests). -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-token</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+    <!-- Implementation of dss-utils (otherwise NoClassDefFound at runtime). -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-utils-apache-commons</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- CLI -->
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli</artifactId>
+      <version>${picocli.version}</version>
+    </dependency>
+    <!-- Generates native-image reachability metadata for @Command classes at compile time. -->
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli-codegen</artifactId>
+      <version>${picocli.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Quiet logging so the console isn't flooded by DSS. -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
+
+    <!-- Tests -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- Filter version.properties so the version flag reflects the Maven version. -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>version.properties</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>version.properties</exclude>
+        </excludes>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${compiler.plugin.version}</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>info.picocli</groupId>
+              <artifactId>picocli-codegen</artifactId>
+              <version>${picocli.version}</version>
+            </path>
+          </annotationProcessorPaths>
+          <compilerArgs>
+            <arg>-Aproject=${project.groupId}/${project.artifactId}</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.plugin.version}</version>
+        <configuration>
+          <argLine>${native.access.arg}</argLine>
+        </configuration>
+      </plugin>
+
+      <!-- Convenience: mvn exec:java -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>${exec.plugin.version}</version>
+        <configuration>
+          <mainClass>${main.class}</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- ===================== PRIMARY: single self-contained native binary ===================== -->
+    <profile>
+      <id>native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.graalvm.buildtools</groupId>
+            <artifactId>native-maven-plugin</artifactId>
+            <version>${native.plugin.version}</version>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <id>build-native</id>
+                <goals>
+                  <goal>compile-no-fork</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+            </executions>
+            <configuration>
+              <imageName>dstool</imageName>
+              <mainClass>${main.class}</mainClass>
+              <fallback>false</fallback>
+              <metadataRepository>
+                <enabled>true</enabled>
+              </metadataRepository>
+              <buildArgs>
+                <buildArg>--no-fallback</buildArg>
+                <buildArg>-O2</buildArg>
+                <!-- FFM PKCS#11 downcalls (no JNI). -->
+                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
+                <!-- Security providers initialised at run time (GraalVM 25 future-default). -->
+                <buildArg>--future-defaults=run-time-initialize-security-providers</buildArg>
+                <buildArg>-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider</buildArg>
+                <!-- Belt-and-suspenders: keep BouncyCastle's DRBG out of the build-time heap. -->
+                <buildArg>--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG,org.bouncycastle.jcajce.provider.drbg.DRBG$Default,org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV</buildArg>
+              </buildArgs>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- ===================== FALLBACK: jpackage self-contained bundle ===================== -->
+    <profile>
+      <id>jpackage</id>
+      <build>
+        <plugins>
+          <!-- Copy runtime dependencies into target/lib (do NOT shade: BouncyCastle is signed). -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>${dependency.plugin.version}</version>
+            <executions>
+              <execution>
+                <id>copy-deps</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-dependencies</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                  <includeScope>runtime</includeScope>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Runnable jar with Class-Path: lib/ -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <version>${jar.plugin.version}</version>
+            <configuration>
+              <archive>
+                <manifest>
+                  <mainClass>${main.class}</mainClass>
+                  <addClasspath>true</addClasspath>
+                  <classpathPrefix>lib/</classpathPrefix>
+                </manifest>
+              </archive>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

@@ -1,0 +1,118 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  # Primary deliverable: single self-contained native binary (Apple Silicon).
+  native:
+    name: native binary (arm64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM CE 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+
+      - name: Build native binary
+        run: ./mvnw -Pnative -ntp -DskipTests package
+
+      - name: Rename, smoke-test and checksum
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
+          NAME="dstool-${VER}-macos-arm64"
+          mv target/dstool "$NAME"
+          chmod +x "$NAME"
+          ./"$NAME" --version
+          shasum -a 256 "$NAME" > "$NAME.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-arm64
+          path: |
+            dstool-*-macos-arm64
+            dstool-*-macos-arm64.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  # Fallback: self-contained jpackage bundle with an embedded JRE, both architectures.
+  # (native-image cannot cross-compile and GraalVM 25 has no macOS x64 build, so the
+  # jpackage bundle is how Intel users get a native-arch, no-Java-needed artifact.)
+  jpackage:
+    name: jpackage bundle (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'maven'
+
+      - name: Build bundle
+        run: |
+          set -euo pipefail
+          ./mvnw -Pjpackage -ntp -DskipTests package
+          packaging/jlink.sh
+          packaging/jpackage.sh
+          target/dist/dstool --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jpackage-${{ matrix.arch }}
+          path: |
+            target/dist/*.tar.gz
+            target/dist/*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  # Collect both architectures and publish one GitHub Release.
+  publish:
+    name: publish release
+    needs: [native, jpackage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -R dist
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DSTool ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          files: |
+            dist/dstool-*-macos-arm64
+            dist/dstool-*-macos-arm64.sha256
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256

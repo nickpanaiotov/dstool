@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build + smoke (arm64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM CE 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+
+      - name: Unit tests (JVM, software PKCS#12 key)
+        run: ./mvnw -ntp test
+
+      - name: Build native binary
+        run: ./mvnw -Pnative -ntp -DskipTests package
+
+      - name: Smoke test (no card required)
+        run: |
+          set -euo pipefail
+          ./target/dstool --version
+          ./target/dstool --help
+          ./target/dstool sign --help
+          # missing driver must exit 3
+          ./target/dstool list-keys --pkcs11-lib /nonexistent.dylib && exit 1 || test $? -eq 3
+          echo "smoke OK"
