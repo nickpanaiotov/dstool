@@ -1,17 +1,36 @@
 name: ci
 
+# Doc-only changes don't need the (heavy) native build.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.gitignore'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.gitignore'
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: build + smoke (arm64)
-    runs-on: macos-14
+    name: build + smoke (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            label: macos-arm64
+          - runner: ubuntu-latest
+            label: linux-x86_64
     steps:
       - uses: actions/checkout@v5
 
@@ -40,5 +59,5 @@ jobs:
           ./target/dstool --help
           ./target/dstool sign --help
           # missing driver must exit 3
-          ./target/dstool list-keys --pkcs11-lib /nonexistent.dylib && exit 1 || test $? -eq 3
+          ./target/dstool list-keys --pkcs11-lib /nonexistent.so && exit 1 || test $? -eq 3
           echo "smoke OK"

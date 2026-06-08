@@ -9,10 +9,25 @@ permissions:
   contents: read
 
 jobs:
-  # Primary deliverable: single self-contained native binary (Apple Silicon).
+  # Primary deliverable: single self-contained native binary.
+  # macOS arm64 (Apple Silicon) + Linux x86_64. Intel macOS uses the jpackage
+  # bundle below (or runs the arm64 binary via Rosetta 2).
   native:
-    name: native binary (arm64)
-    runs-on: macos-14
+    name: native binary (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            os: macos
+            arch: arm64
+          # Build Linux on the oldest supported LTS for the widest glibc
+          # compatibility (the binary is dynamically linked so it can dlopen
+          # the PKCS#11 middleware at runtime; a fully-static musl build cannot).
+          - runner: ubuntu-22.04
+            os: linux
+            arch: x86_64
     steps:
       - uses: actions/checkout@v5
 
@@ -31,18 +46,22 @@ jobs:
         run: |
           set -euo pipefail
           VER="${GITHUB_REF_NAME#v}"
-          NAME="dstool-${VER}-macos-arm64"
+          NAME="dstool-${VER}-${{ matrix.os }}-${{ matrix.arch }}"
           mv target/dstool "$NAME"
           chmod +x "$NAME"
           ./"$NAME" --version
-          shasum -a 256 "$NAME" > "$NAME.sha256"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$NAME" > "$NAME.sha256"
+          else
+            shasum -a 256 "$NAME" > "$NAME.sha256"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: native-arm64
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            dstool-*-macos-arm64
-            dstool-*-macos-arm64.sha256
+            dstool-*-${{ matrix.os }}-${{ matrix.arch }}
+            dstool-*-${{ matrix.os }}-${{ matrix.arch }}.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -114,5 +133,7 @@ jobs:
           files: |
             dist/dstool-*-macos-arm64
             dist/dstool-*-macos-arm64.sha256
+            dist/dstool-*-linux-x86_64
+            dist/dstool-*-linux-x86_64.sha256
             dist/*.tar.gz
             dist/*.tar.gz.sha256
